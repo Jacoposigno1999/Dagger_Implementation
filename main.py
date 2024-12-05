@@ -8,9 +8,9 @@ import os
 from datetime import datetime
 import gzip
 import json
-from model import Model
-import train_agent
-from utils import *
+#from model import Model
+#import train_agent
+#from utils import *
 import pygame
 import torch
 import Agent
@@ -26,7 +26,7 @@ sensor_count = 29
 action_count = 3
 
 # Number of demonstations that the expert preforms
-expert_demonstration_count = 1#3
+expert_demonstration_count = 3
 
 # Episode count of dagger step
 dagger_episode_count = 20
@@ -85,6 +85,11 @@ def handle_keys():
 # ----------------------------------------------------------------------------
 print("Expert Demonstration")
 for episode in range(expert_demonstration_count):
+
+    # If the expert dataset is already available there is no need of this part
+    if os.path.exists('./Data'):
+        break
+
     # Start torcs
     env = gym.make("CarRacing-v3", render_mode="human") #env = gym.TorcsEnv(manual=manual_reset)
 
@@ -155,6 +160,23 @@ for episode in range(expert_demonstration_count):
         print(f'action_all lenght: {len(actions_all)} and shape of the elements: {actions_all[0].shape}')
 
 # --------------------------------------------------------------------------------
+#Saving all the expert dimostrations 
+# Save both lists in a dictionary
+if not os.path.exists('./Data'):
+    os.mkdir('./Data')
+    #print(f'observations_all  type: {type(observations_all)} and dimesions: {len(observations_all)}')
+    #print(f'observations_all[0]  type: {type(observations_all[0])} and dimesions: {observations_all[0].shape} ')    
+    torch.save(observations_all, './Data/observations_all.pt')  # Saves the tensor to 'tensor.pt'
+    torch.save(actions_all, './Data/actions_all.pt') 
+
+#Loading expert dimostration
+observations_all = torch.load('./Data/observations_all.pt')
+actions_all = torch.load('./Data/actions_all.pt')
+#print(f'observations_all  type: {type(observations_all)} and dimesions: {len(observations_all)} ')
+#print(f'observations_all[0]  type: {type(observations_all[0])} and dimesions: {observations_all[0].shape} ')  
+#---------------------------------------------------------------------------------
+
+print('Expert dataset is available')
 
 episode_rewards = []
 running = True
@@ -172,7 +194,10 @@ print("Agent Created")
 model.train_model(observations_all, actions_all, n_epoch=epoch_count,
              batch=batch_size)
 
-model.save("dagger_models/model_0.pth")
+
+if not os.path.exists('./Models'):
+    os.mkdir('./Models')
+model.save("./Models/model_0.pth")
 model_number = 0
 old_model_number = 0
 
@@ -190,7 +215,7 @@ for episode in range(dagger_episode_count):
     curr_beta = beta_i ** episode
     episod_reward = 0
 
-    model.load("dagger_models/model_{}.pth".format(model_number))
+    model.load("Models/model_{}.pth".format(model_number))
 
     if model_number != old_model_number:
         print("Using model : {}".format(episode))
