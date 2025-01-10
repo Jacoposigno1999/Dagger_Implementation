@@ -16,6 +16,7 @@ import torch
 import Agent
 import torch.nn as nn
 import torch.optim as optim
+from Utils import find_last_episode
 
 # DEFINES AND INITIALIZATIONS
 # ----------------------------------------------------------------------------
@@ -32,16 +33,16 @@ expert_demonstration_count = 3
 dagger_episode_count = 20
 
 # Number of steps per expert iteration
-expert_steps = 500#4000
+expert_steps = 4000
 
 # Number of steps per dagger iteration
 dagger_steps = 500#4000
 
 # Number of epochs
-epoch_count = 100
+epoch_count = 20
 
 # Batch size
-batch_size = 32
+batch_size = 128
 
 # If track selection is done manually
 manual_reset = False
@@ -99,7 +100,7 @@ for episode in range(expert_demonstration_count):
 
     # Expert demonstration
     print("#" * 100)
-    print("# Episode: %d start" % episode)
+    print(f"# Episode: {episode} start")
     for i in range(expert_steps):
         # If first iteration, get observation and action
         if i == 0:
@@ -166,12 +167,12 @@ if not os.path.exists('./Data'):
     os.mkdir('./Data')
     #print(f'observations_all  type: {type(observations_all)} and dimesions: {len(observations_all)}')
     #print(f'observations_all[0]  type: {type(observations_all[0])} and dimesions: {observations_all[0].shape} ')    
-    torch.save(observations_all, './Data/observations_all.pt')  # Saves the tensor to 'tensor.pt'
-    torch.save(actions_all, './Data/actions_all.pt') 
+    torch.save(observations_all, './Data/Expert_observations_all.pt')  #Serialized into binary format using pickle
+    torch.save(actions_all, './Data/Expert_actions_all.pt') 
 
 #Loading expert dimostration
-observations_all = torch.load('./Data/observations_all.pt')
-actions_all = torch.load('./Data/actions_all.pt')
+observations_all = torch.load('./Data/Expert_observations_all.pt')
+actions_all = torch.load('./Data/Expert_actions_all.pt')
 #print(f'observations_all  type: {type(observations_all)} and dimesions: {len(observations_all)} ')
 #print(f'observations_all[0]  type: {type(observations_all[0])} and dimesions: {observations_all[0].shape} ')  
 #---------------------------------------------------------------------------------
@@ -182,44 +183,58 @@ episode_rewards = []
 running = True
 
 # Create the learning agent
-
 model = Agent.Agent(name='model', input_num=observations_all[0].size,
                     output_num=actions_all[0].size)
 
-print("Agent Created")
-
-# Train the model with the observations and actions availiable 
-# criterion = nn.MSELoss()
-# optimizer = optim.Adam(model.parameters(), lr=0.001)
-model.train_model(observations_all, actions_all, n_epoch=epoch_count,
-             batch=batch_size)
-
-
 if not os.path.exists('./Models'):
     os.mkdir('./Models')
-model.save("./Models/model_0.pth")
-model_number = 0
-old_model_number = 0
 
-print("Agent Trained")
+    print("Agent Created")
+    # Train the model with the observations and actions availiable 
+    model.train_model(observations_all, actions_all, n_epoch=epoch_count,
+                batch=batch_size)
+    
+    print("Agent Trained")
+
+    model.save("./Models/model_0.pth")
+    print("Agent Saved")
+
+else:
+    print("Initial Agent trained only with expert demostration already created")
+
+
+
 
 # DAGGER STEP
 # ----------------------------------------------------------------------------
 # Run the agent and aggregate new data produced by the expert
 beta_i = 0.9
 
-for episode in range(dagger_episode_count):
+
+# Directory containing saved models
+model_directory = r'C:\Users\39388\Desktop\Dagger_project\Models'
+
+# Check the last saved model
+start_episode = find_last_episode(model_directory)
+
+model_number = start_episode
+old_model_number = start_episode
+
+print(f"The Dagger Loop will restart from episode: {start_episode}")
+
+for episode in range(start_episode, dagger_episode_count):
     # Observations and actions for this iteration are stored here
     observation_list = []
     action_list = []
     curr_beta = beta_i ** episode
     episod_reward = 0
 
-    model.load("Models/model_{}.pth".format(model_number))
+
+    model.load("./Models/model_{}.pth".format(model_number))   
 
     if model_number != old_model_number:
-        print("Using model : {}".format(episode))
-        print("Beta value: {}".format(curr_beta))
+        print(f"Using model : {episode}")
+        print(f"Beta value: {curr_beta}")
         old_model_number = model_number
 
     
@@ -228,7 +243,7 @@ for episode in range(dagger_episode_count):
     env = gym.make("CarRacing-v3", render_mode="human") #env = gym.TorcsEnv(manual=manual_reset)
 
     print("#" * 100)
-    print("# Episode: %d start" % episode)
+    print(f"# Episode: {episode} start")
     
     for i in range(dagger_steps):
         # If first iteration, get observation and action
@@ -240,7 +255,7 @@ for episode in range(dagger_episode_count):
         #if interface.check_key(pygame.KEYDOWN, pygame.K_q):
             #break
         for event in pygame.event.get():
-            if event.type == pygame.QUIT:
+            if event.type == pygame.QUIT:  
                 running = False
         if running == False:
             break
@@ -306,7 +321,7 @@ for episode in range(dagger_episode_count):
     model.train_model(observations_all, actions_all, n_epoch=epoch_count,
              batch=batch_size)
     model_number += 1
-    path = r'C:\Users\39388\Desktop\Dagger\Code\dagger-main\Trained_models\model{}.pth'.format(model_number) 
+    path = r'C:\Users\39388\Desktop\Dagger_project\Models\model_{}.pth'.format(model_number) 
     model.save(path)
     
 
