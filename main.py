@@ -20,12 +20,6 @@ from Utils import find_last_episode
 
 # DEFINES AND INITIALIZATIONS
 # ----------------------------------------------------------------------------
-# Number of sensors in observations
-sensor_count = 29
-
-# Number of availiable actions
-action_count = 3
-
 # Number of demonstations that the expert preforms
 expert_demonstration_count = 3
 
@@ -36,7 +30,7 @@ dagger_episode_count = 20
 expert_steps = 4000
 
 # Number of steps per dagger iteration
-dagger_steps = 500#4000
+dagger_steps = 1000#4000
 
 # Number of epochs
 epoch_count = 20
@@ -44,30 +38,19 @@ epoch_count = 20
 # Batch size
 batch_size = 128
 
-# If track selection is done manually
-manual_reset = False
 
-# If wheel or keyboard is used
-using_steering_wheel = True
-
-# FILL HERE IF AUTOMATIC DRIVING
-automatic = True
-
-running = True
+running = True# A cosa mi serve
 
 # All observations and their corresponding actions are stored here
-observations_all = [] #= np.zeros((0, sensor_count))
-actions_all = [] #= np.zeros((0, action_count))
+observations_all = [] 
+actions_all = [] 
 
-# Initialize the input interface
-# interface = interface.Interface(using_steering_wheel)
 
-# # Create the expert
-# expert = expert.Expert(interface, automatic=automatic)
+
 
 # Initialize Pygame for capturing key events####################################
 pygame.init()
-screen = pygame.display.set_mode((600, 400))
+#screen = pygame.display.set_mode((600, 400))
 pygame.display.set_caption("Car Racing Control")
 
 # Main function to handle keyboard input
@@ -91,8 +74,8 @@ for episode in range(expert_demonstration_count):
     if os.path.exists('./Data'):
         break
 
-    # Start torcs
-    env = gym.make("CarRacing-v3", render_mode="human") #env = gym.TorcsEnv(manual=manual_reset)
+    # Initializing the envirionment 
+    env = gym.make("CarRacing-v3", render_mode="human") 
 
     # Observations and actions for this iteration are stored here
     observation_list = []
@@ -104,36 +87,26 @@ for episode in range(expert_demonstration_count):
     for i in range(expert_steps):
         # If first iteration, get observation and action
         if i == 0:
-            action = np.array([0.0, 0.0, 0.0])#act = env.act
-            observation, info = env.reset()#obs = env.obs
+            action = np.array([0.0, 0.0, 0.0])
+            observation, info = env.reset()
 
         # Get the action from the expert
-        handle_keys()#--> mi aggiorna #action act = expert.get_expert_act(act, obs) 
-
-        # Normalize the observation and add it to list of observations
-        #obs.normalize_obs()
-        # obs_list = obs.get_obs(angle=True, gear=True, rpm=True,
-        #                        speedX=True, speedY=True, track=True,
-        #                        trackPos=True, wheelSpinVel=True)
+        handle_keys()#--> updating action, global variable defined in def handle_keys()
+        #print(f'obs type: {type(observation)} and dimesions: {observation.shape} ') 
         gray_observation = np.dot(observation[...,:3], [0.2126, 0.7152, 0.0722])
         #convert the image to a torch tensor
         gray_observation = torch.tensor(gray_observation[np.newaxis, :, :], dtype=torch.float32)  # Add channel and convert to tensor
         observation_list.append(gray_observation)
-        # print(f'gray obs type: {type(gray_observation)} and dimesions: {gray_observation.shape} ') 
-        # print(f'action type: {type(action)} and dimesions: {action.size} ') #action is an np array 
+        #print(f'gray obs type: {type(gray_observation)} and dimesions: {gray_observation.shape} ') 
+        #print(f'action type: {type(action)} and dimesions: {action.size} ') #action is an np array 
 
-        # Normalize the act and add it to list of actions
-        # Important to un-normalize the act before sending it to torcs
-        #act.normalize_act()
-        #act_list = act.get_act(gas=True, gear=True, steer=True)
         action_list.append(torch.from_numpy(action).type(torch.float32))
-        #act.un_normalize_act()
         #print(f'action_list type: {type(action_list)} and size {len(action_list)} and action_list[0] type: {type(action_list[0])}')
-        print(f'action_list type: {type(action)} and agent_action shape: {action.shape}')
+        #print(f'action_list type: {type(action)} and agent_action shape: {action.shape}')
 
+        #print(action)
         # Execute the action and get the new observation
-        print(action)
-        observation, reward, terminated, truncated, info = env.step(action)#obs = env.step(act)
+        observation, reward, _, _, info = env.step(action)
         env.render()
 
         # print(f'obs  type: {type(observation)} and dimesions: {observation.shape} ')  
@@ -154,10 +127,10 @@ for episode in range(expert_demonstration_count):
     print('Packing expert data into arrays...')
     for observation, action_made in zip(observation_list, action_list):
         # Concatenate all observations into array of arrays
-        observations_all.append(observation) #= np.concatenate([observations_all, np.reshape(observation, (1, sensor_count))], axis=0)
+        observations_all.append(observation) 
         print(f'observation_all lenght: {len(observations_all)} and shape of the elements: {observations_all[0].shape}')
         # Concatenate all actions into array of arrays
-        actions_all.append(action_made) #=np.concatenate([actions_all, np.reshape(action_made, (1, action_count))], axis=0)
+        actions_all.append(action_made) 
         print(f'action_all lenght: {len(actions_all)} and shape of the elements: {actions_all[0].shape}')
 
 # --------------------------------------------------------------------------------
@@ -185,14 +158,16 @@ running = True
 # Create the learning agent
 model = Agent.Agent(name='model', input_num=observations_all[0].size,
                     output_num=actions_all[0].size)
+print("Agent Created")
 
+
+#checking if we already trained the agent with expert informations .
 if not os.path.exists('./Models'):
     os.mkdir('./Models')
 
-    print("Agent Created")
     # Train the model with the observations and actions availiable 
     model.train_model(observations_all, actions_all, n_epoch=epoch_count,
-                batch=batch_size)
+                batch=batch_size, session_id = '1st_Training')
     
     print("Agent Trained")
 
@@ -200,7 +175,7 @@ if not os.path.exists('./Models'):
     print("Agent Saved")
 
 else:
-    print("Initial Agent trained only with expert demostration already created")
+    print("Initial Agent already trained")
 
 
 
@@ -212,7 +187,7 @@ beta_i = 0.9
 
 
 # Directory containing saved models
-model_directory = r'C:\Users\39388\Desktop\Dagger_project\Models'
+model_directory = r'Models'
 
 # Check the last saved model
 start_episode = find_last_episode(model_directory)
@@ -220,9 +195,16 @@ start_episode = find_last_episode(model_directory)
 model_number = start_episode
 old_model_number = start_episode
 
+#If we are restarting the Dagger loop after a break, we need to load the last saved dataset with all the (Obs, Act) pairs 
+# if os.path.exists('./Data/Exp_obs_&_correction.pt'):
+#     observations_all = torch.load(r'./Data/Exp_obs_&_correction.pt')
+#     actions_all = torch.load(r'./Data/Exp_act_&_correction.pt')
+
 print(f"The Dagger Loop will restart from episode: {start_episode}")
 
 for episode in range(start_episode, dagger_episode_count):
+
+
     # Observations and actions for this iteration are stored here
     observation_list = []
     action_list = []
@@ -240,7 +222,7 @@ for episode in range(start_episode, dagger_episode_count):
     
 
     # Restart the game for every iteration
-    env = gym.make("CarRacing-v3", render_mode="human") #env = gym.TorcsEnv(manual=manual_reset)
+    env = gym.make("CarRacing-v3", render_mode="human") 
 
     print("#" * 100)
     print(f"# Episode: {episode} start")
@@ -252,8 +234,6 @@ for episode in range(start_episode, dagger_episode_count):
             observation, info = env.reset()#obs = env.obs
 
         # If quit key is pressed, prematurely end this run
-        #if interface.check_key(pygame.KEYDOWN, pygame.K_q):
-            #break
         for event in pygame.event.get():
             if event.type == pygame.QUIT:  
                 running = False
@@ -261,46 +241,27 @@ for episode in range(start_episode, dagger_episode_count):
             break
 
         # Get the action that the expert would take
-        handle_keys()#new_act = expert.get_expert_act(act, obs)
-        #new_act.normalize_act()
-        #new_act_list = new_act.get_act(gas=True,
-                                       #gear=True,
-                                       #steer=True)
+        handle_keys()
+   
         action_list.append(torch.from_numpy(action).type(torch.float32))
 
-        # Normalize the observation and add it to list of observations
-        # obs.normalize_obs()
-        # obs_list = obs.get_obs(angle=True, gear=True, rpm=True,
-        #                        speedX=True, speedY=True, track=True,
-        #                        trackPos=True, wheelSpinVel=True)
-        gray_observation = np.dot(observation[...,:3], [0.2126, 0.7152, 0.0722])
+        gray_observation = np.dot(observation[...,:3], [0.2126, 0.7152, 0.0722])#image to black and withe 
         #convert the image to a torch tensor
         gray_observation = torch.tensor(gray_observation[np.newaxis, :, :], dtype=torch.float32)  # Add channel and convert to tensor
         observation_list.append(gray_observation)
         
         #ACTION FROM THE AGENT 
-        # Normalize the act and add it to list of actions
-        # Important to un-normalize the act before sending it to torcs
         agent_action = model.predict(gray_observation).reshape(3,)
-        #act.set_act(act_list, gas=True, gear=True, steer=True)
-        #act.un_normalize_act()
-
+ 
         # calculate linear combination of expert and network policy
         print(f'expert action: {action}')
         print(f'agent action: {agent_action}')
-        pi = curr_beta * action + (1 - curr_beta) * agent_action#.flatten()
+        pi = curr_beta * action + (1 - curr_beta) * agent_action
         print(f'pi {pi} type: {type(agent_action)} and pi shape: {pi.shape}')
-
-
-
-
-
-
         #print(f'agent_action {agent_action} type: {type(agent_action)} and agent_action shape: {agent_action.shape}')
+
         # Execute the action and get the new observation
-          #agent_action = agent_action.reshape(3,)
-        #print(f'agent_action {agent_action} type: {type(agent_action)} and agent_action shape: {agent_action.shape}')
-        observation, reward, terminated, truncated, info = env.step(pi)#obs = env.step(act)
+        observation, reward, terminated, truncated, info = env.step(pi)
         episod_reward += reward
         env.render()
 
@@ -310,18 +271,22 @@ for episode in range(start_episode, dagger_episode_count):
     # Summarize the observations and corresponding actions
     for observation, action_made in zip(observation_list, action_list):
         # Concatenate all observations into array of arrays
-        observations_all.append(observation)#observations_all = np.concatenate([observations_all, np.reshape(observation, (1, sensor_count))], axis=0)
+        observations_all.append(observation)
 
         # Concatenate all actions into array of arrays
-        actions_all.append(action_made) #=np.concatenate([actions_all, np.reshape(action_made, (1, action_count))], axis=0)
+        actions_all.append(action_made) 
+
+    torch.save(observations_all, './Data/Exp_obs_&_correction.pt')  #Serialized into binary format using pickle
+    torch.save(actions_all, './Data/Exp_act_&_correction.pt') 
+
 
 
     # Train the model with the aggregated observations and actions
     print("Training the model with the aggregated observations and actions...")
-    model.train_model(observations_all, actions_all, n_epoch=epoch_count,
-             batch=batch_size)
     model_number += 1
-    path = r'C:\Users\39388\Desktop\Dagger_project\Models\model_{}.pth'.format(model_number) 
+    model.train_model(observations_all, actions_all, n_epoch=epoch_count,
+             batch=batch_size, session_id= f'model_{model_number}_Loss')
+    path = r'.\Models\model_{}.pth'.format(model_number) 
     model.save(path)
     
 
